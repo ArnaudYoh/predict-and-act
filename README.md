@@ -1,3 +1,6 @@
+# predict-and-act
+Extending the results of the paper "Learning to Act by Predicting the Future"
+
 # Code for the paper "Learning to Act by Predicting the Future" by Alexey Dosovitskiy and Vladlen Koltun
 
 If you use this code or the provided environments in your research, please cite the following paper:
@@ -60,6 +63,4 @@ If you use this code or the provided environments in your research, please cite 
 
 - In battle scenarios, the reward provided by ViZDoom is the number of frags. For training the baseline approaches we did not use this reward, but rather a weighted average of the three measurements, same as for our approach, for a fair comparison.
 
-## Troubleshooting
 
-Please send bug reports to Alexey Dosovitskiy <adosovitskiy@gmail.com>
