@@ -38,17 +38,19 @@ class MultiDoomSimulator:
 		
 		imgs = []
 		meass = []
+		objects = []
 		rwrds = []
 		terms = []
 		
 		for (sim,act) in zip(self.simulators, actions):
-			img, meas, rwrd, term = sim.step(act)
+			img, meas, game_object, rwrd, term = sim.step(act)
 			imgs.append(img)
 			meass.append(meas)
+			objects.append(game_object)
 			rwrds.append(rwrd)
 			terms.append(term)
 			
-		return imgs, meass, rwrds, terms
+		return imgs, meass, objects, rwrds, terms
 	
 	def num_actions(self, nsim):
 		return self.simulators[nsim].num_actions

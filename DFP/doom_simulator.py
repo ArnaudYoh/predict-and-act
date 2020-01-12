@@ -5,7 +5,8 @@ from __future__ import print_function
 import sys
 import os
 
-vizdoom_path = '../../../../toolboxes/ViZDoom_2017_03_31'
+# vizdoom_path = '../../../../toolboxes/ViZDoom_2017_03_31'
+vizdoom_path = '/home/naunauyoh/anaconda3/lib/python3.7/site-packages/vizdoom'
 sys.path = [os.path.join(vizdoom_path,'bin/python3')] + sys.path
 
 import vizdoom 
@@ -28,8 +29,13 @@ class DoomSimulator:
         self.game_args = args['game_args']
         
         self._game = vizdoom.DoomGame()
-        self._game.set_vizdoom_path(os.path.join(vizdoom_path,'bin/vizdoom'))
-        self._game.set_doom_game_path(os.path.join(vizdoom_path,'bin/freedoom2.wad'))
+        self._game.add_available_game_variable(vizdoom.GameVariable.POSITION_X)
+        self._game.add_available_game_variable(vizdoom.GameVariable.POSITION_Y)
+        self._game.add_available_game_variable(vizdoom.GameVariable.POSITION_Z)
+        self._game.set_objects_info_enabled(True)
+        self._game.set_sectors_info_enabled(True)
+        self._game.set_vizdoom_path(os.path.join(vizdoom_path,'vizdoom'))
+        self._game.set_doom_game_path(os.path.join(vizdoom_path,'freedoom2.wad'))
         self._game.load_config(self.config)
         self._game.add_game_args(self.game_args)
         self.curr_map = 0
@@ -60,6 +66,7 @@ class DoomSimulator:
         assert(self.num_buttons == len(self.discrete_controls) + len(self.continuous_controls))
         assert(len(self.continuous_controls) == 0) # only discrete for now
         self.num_meas = self._game.get_available_game_variables_size()
+        self.num_objects = 4
             
         self.meas_tags = []
         for nm in range(self.num_meas):
@@ -86,6 +93,19 @@ class DoomSimulator:
         if self.game_initialized:
             self._game.close()
             self.game_initialized = False
+
+    def get_closest(self, object_poss, player_pos):
+        min_idx = None
+        min_dist = None
+        if not object_poss:
+            return [0, 0]
+        for idx, object_pos in enumerate(object_poss):
+            curr_dist = np.sqrt((object_pos[0] - player_pos[0])**2 + (object_pos[1] - player_pos[1])**2)
+            if min_idx is None or min_dist > curr_dist:
+                min_dist = curr_dist
+                min_idx = idx
+
+        return [object_poss[min_idx][0] - player_pos[0], object_poss[min_idx][1] - player_pos[1]]
             
     def step(self, action=0):
         """
@@ -101,12 +121,13 @@ class DoomSimulator:
         """
         self.init_game()
         
-        rwrd = self._game.make_action(action, self.frame_skip)        
+        rwrd = self._game.make_action(action, self.frame_skip)
         state = self._game.get_state()
         
         if state is None:
             img = None
             meas = None
+            game_object = None
         else:        
             # ViZDoom 1.0
             #raw_img = state.image_buffer
@@ -129,6 +150,22 @@ class DoomSimulator:
                 img = raw_img
                 
             meas = state.game_variables # this is a numpy array of game variables specified by the scenario
+            health_kits_pos = []
+            poison_vial_pos = []
+            player_pos = None
+            for o in state.objects:
+                if o.name == 'CustomMedikit' or o.name == 'Medikit':
+                    health_kits_pos.append((o.position_x, o.position_y))
+                elif o.name == 'Poison':
+                    poison_vial_pos.append((o.position_x, o.position_y))
+                elif o.name == 'DoomPlayer':
+                    player_pos = (o.position_x, o.position_y)
+
+            closest_health = self.get_closest(health_kits_pos, player_pos)
+            closest_poison = self.get_closest(poison_vial_pos, player_pos)
+
+            game_object = np.array([closest_health, closest_poison])
+            game_object = np.concatenate(game_object)
             
         term = self._game.is_episode_finished() or self._game.is_player_dead()
         
@@ -136,8 +173,9 @@ class DoomSimulator:
             self.new_episode() # in multiplayer multi_simulator takes care of this            
             img = np.zeros((self.num_channels, self.resolution[1], self.resolution[0]), dtype=np.uint8) # should ideally put nan here, but since it's an int...
             meas = np.zeros(self.num_meas, dtype=np.uint32) # should ideally put nan here, but since it's an int...
+            game_object = np.zeros((self.num_objects,))
             
-        return img, meas, rwrd, term
+        return img, meas, game_object, rwrd, term
     
     def get_random_action(self):
         return [(random.random() >= .5) for i in range(self.num_buttons)]

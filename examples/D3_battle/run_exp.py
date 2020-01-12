@@ -51,8 +51,9 @@ def main(main_args):
 	agent_args = {}
 	
 	# agent type
-	agent_args['agent_type'] = 'advantage'
-	
+	# agent_args['agent_type'] = 'advantage'
+	agent_args['agent_type'] = 'advantage_objects'
+
 	# preprocessing
 	agent_args['preprocess_input_images'] = lambda x: x / 255. - 0.5
 	agent_args['preprocess_input_measurements'] = lambda x: x / 100. - 0.5
@@ -70,7 +71,8 @@ def main(main_args):
 	agent_args['conv_params']     = np.array([(32,8,4), (64,4,2), (64,3,1)],
 									 dtype = [('out_channels',int), ('kernel',int), ('stride',int)])
 	agent_args['fc_img_params']   = np.array([(512,)], dtype = [('out_dims',int)])
-	agent_args['fc_meas_params']  = np.array([(128,), (128,), (128,)], dtype = [('out_dims',int)]) 
+	agent_args['fc_meas_params']  = np.array([(128,), (128,), (128,)], dtype = [('out_dims',int)])
+	agent_args['fc_objects_params']  = np.array([(128,), (128,), (128,)], dtype = [('out_dims',int)])
 	agent_args['fc_joint_params'] = np.array([(512,), (-1,)], dtype = [('out_dims',int)]) # we put -1 here because it will be automatically replaced when creating the net
 	agent_args['weight_decay'] = 0.00000
 	
