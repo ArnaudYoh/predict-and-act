@@ -56,7 +56,6 @@ class Agent:
         self.new_memories_per_batch = args['new_memories_per_batch']
         self.add_experiences_every = args['add_experiences_every']
         self.random_objective_coeffs = args['random_objective_coeffs']
-        self.objective_coeffs_temporal = args['objective_coeffs_temporal']
         self.objective_coeffs_distribution = args['objective_coeffs_distribution']
 
         # net parameters
@@ -150,7 +149,7 @@ class Agent:
         acts_manual = np.zeros((num_samples, self.num_manual_controls), dtype=np.bool)
         return self.postprocess_actions(acts_net, acts_manual)
 
-    def make_net(self, input_images, input_measurements, input_objects, input_actions, input_objective_coeffs):
+    def make_net(self, input_images, input_measurements, input_actions, input_objective_coeffs):
         # Build the net which will perform the future prediction. Returns pred_all (a vector of predicted future values for all actions) and pred_relevant (a vector of predicted future values for the action which was actually taken)
         raise NotImplementedError("Agent should implement make_net")
 
@@ -163,12 +162,8 @@ class Agent:
         self.input_images = tf.placeholder(tf.float32, [None] + [self.state_imgs_shape[1], self.state_imgs_shape[2],
                                                                  self.state_imgs_shape[0]],
                                            name='input_images')
-        self.input_measurements = tf.placeholder(tf.float32, [None] + list(self.state_meas_shape),
+        self.input_measurements = tf.placeholder(tf.float32, [None] + list([x + self.state_objects_shape[0] * self.state_objects_shape[1] for x in self.state_meas_shape]),
                                                  name='input_measurements')
-        self.input_objects = tf.placeholder(tf.float32, [None] + list([self.state_objects_shape[0] * self.state_objects_shape[1]]),
-                                            name='input_objects')
-        print(self.input_measurements)
-        print(self.input_objects)
 
         self.input_targets = tf.placeholder(tf.float32, [None, self.target_dim],
                                             name='input_targets')
@@ -190,7 +185,7 @@ class Agent:
 
         # make the actual net
         self.pred_all, self.pred_relevant = self.make_net(self.input_images_preprocessed,
-                                                          self.input_measurements_preprocessed, self.input_objects,
+                                                          self.input_measurements_preprocessed,
                                                           self.input_actions,
                                                           self.input_objective_coeffs)
         self.full_loss, self.errs_to_print, self.short_summary, self.detailed_summary = self.make_losses(
@@ -331,19 +326,10 @@ class Agent:
             self.batch_size)
         acts = self.preprocess_actions(acts)
 
-        if get_objects:
-            res = self.sess.run([self.tf_minim, self.short_summary, self.detailed_summary] + self.errs_to_print,
+        res = self.sess.run([self.tf_minim, self.short_summary, self.detailed_summary] + self.errs_to_print,
                                 feed_dict={self.input_images: state_imgs,
-                                           self.input_measurements: state_meas,
-                                           self.input_objects: state_objects,
-                                           self.input_targets: targs,
-                                           self.input_actions: acts,
-                                           self.input_objective_coeffs: objs})
-
-        else:
-            res = self.sess.run([self.tf_minim, self.short_summary, self.detailed_summary] + self.errs_to_print,
-                                feed_dict={self.input_images: state_imgs,
-                                           self.input_measurements: state_meas,
+                                           self.input_measurements: np.concatenate(
+                                                                  [state_meas, state_objects], 1),
                                            self.input_targets: targs,
                                            self.input_actions: acts,
                                            self.input_objective_coeffs: objs})
@@ -362,18 +348,9 @@ class Agent:
             self.writer.add_summary(curr_detailed_summary, self.curr_step)
 
         if self.save_param_histograms_every and np.mod(self.curr_step, self.save_param_histograms_every) == 0:
-            if get_objects:
-                summary_string = self.sess.run(self.param_summary, feed_dict={self.input_images: state_imgs,
-                                                                              self.input_measurements: state_meas,
-                                                                              self.input_objects: state_objects,
-                                                                              self.input_targets: targs,
-                                                                              self.input_actions: acts,
-                                                                              self.input_objective_coeffs: objs})
-
-
-            else:
-                summary_string = self.sess.run(self.param_summary, feed_dict={self.input_images: state_imgs,
-                                                                          self.input_measurements: state_meas,
+            summary_string = self.sess.run(self.param_summary, feed_dict={self.input_images: state_imgs,
+                                                                          self.input_measurements: np.concatenate(
+                                                                  [state_meas, state_objects], 1),
                                                                           self.input_targets: targs,
                                                                           self.input_actions: acts,
                                                                           self.input_objective_coeffs: objs})

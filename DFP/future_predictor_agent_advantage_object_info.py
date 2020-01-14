@@ -13,7 +13,7 @@ from .agent import Agent
 class FuturePredictorAgentAdvantageObject(Agent):
 
     # input_measurements also contains info about closest objects
-    def make_net(self, input_images, input_measurements, input_objects, input_actions, input_objectives, reuse=False):
+    def make_net(self, input_images, input_measurements, input_actions, input_objectives, reuse=False):
         if reuse:
             tf.get_variable_scope().reuse_variables()
 
@@ -24,13 +24,12 @@ class FuturePredictorAgentAdvantageObject(Agent):
         p_img_conv = my_ops.conv_encoder(input_images, self.conv_params, 'p_img_conv', msra_coeff=0.9)
         p_img_fc = my_ops.fc_net(my_ops.flatten(p_img_conv), self.fc_img_params, 'p_img_fc', msra_coeff=0.9)
         p_meas_fc = my_ops.fc_net(input_measurements, self.fc_meas_params, 'p_meas_fc', msra_coeff=0.9)
-        p_object_fc = my_ops.fc_net(my_ops.flatten(input_objects), self.fc_objects_params, 'p_objects_fc',msra_coeff=0.9)
 
         if isinstance(self.fc_obj_params, np.ndarray):
             p_obj_fc = my_ops.fc_net(input_objectives, self.fc_obj_params, 'p_obj_fc', msra_coeff=0.9)
-            p_concat_fc = tf.concat([p_img_fc, p_meas_fc, p_object_fc, p_obj_fc], 1)
+            p_concat_fc = tf.concat([p_img_fc, p_meas_fc, p_obj_fc], 1)
         else:
-            p_concat_fc = tf.concat([p_img_fc, p_meas_fc, p_object_fc], 1)
+            p_concat_fc = tf.concat([p_img_fc, p_meas_fc], 1)
             if self.random_objective_coeffs:
                 raise Exception('Need fc_obj_params with randomized objectives')
 
@@ -83,8 +82,8 @@ class FuturePredictorAgentAdvantageObject(Agent):
             curr_objective_coeffs = objective_coeffs
 
         predictions = self.sess.run(self.pred_all, feed_dict={self.input_images: state_imgs,
-                                                              self.input_measurements: state_meas,
-                                                              self.input_objects: state_object,
+                                                              self.input_measurements: np.concatenate(
+                                                                  [state_meas, state_object], 1),
                                                               self.input_objective_coeffs: curr_objective_coeffs})
 
         self.curr_predictions = predictions[:, :, self.objective_indices] * curr_objective_coeffs[:, None, :]

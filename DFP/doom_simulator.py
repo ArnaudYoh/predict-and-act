@@ -154,12 +154,15 @@ class DoomSimulator:
             poison_vial_pos = []
             player_pos = None
             for o in state.objects:
-                if o.name == 'CustomMedikit' or o.name == 'Medikit':
-                    health_kits_pos.append((o.position_x, o.position_y))
-                elif o.name == 'Poison':
-                    poison_vial_pos.append((o.position_x, o.position_y))
-                elif o.name == 'DoomPlayer':
+                if o.name == 'DoomPlayer':
                     player_pos = (o.position_x, o.position_y)
+                    break
+
+            for label in state.labels:
+                if label.name == 'CustomMedikit' or label.name == 'Medikit':
+                    health_kits_pos.append((label.object_position_x, label.object_position_y))
+                elif label.name == 'Poison':
+                    poison_vial_pos.append((label.object_position_x, label.object_position_y))
 
             closest_health = self.get_closest(health_kits_pos, player_pos)
             closest_poison = self.get_closest(poison_vial_pos, player_pos)

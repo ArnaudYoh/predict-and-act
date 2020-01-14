@@ -10,6 +10,7 @@ from . import util as my_util
 from .future_predictor_agent_advantage import FuturePredictorAgentAdvantage
 from .future_predictor_agent_advantage_nonorm import FuturePredictorAgentAdvantageNoNorm
 from .future_predictor_agent_advantage_object_info import FuturePredictorAgentAdvantageObject
+from .future_predictor_agent_advantage_object_info_no_img import FuturePredictorAgentAdvantageObjectNoImage
 from .future_predictor_agent_basic import FuturePredictorAgentBasic
 from .future_target_maker import FutureTargetMaker
 from .multi_doom_simulator import MultiDoomSimulator
@@ -114,6 +115,10 @@ class MultiExperiment:
                                                           agent_args)  # no normalizatio in the advantage stream
         elif self.agent_type == 'advantage_objects':
             self.ag = FuturePredictorAgentAdvantageObject(self.sess, agent_args)
+             #self.ag = FuturePredictorAgentAdvantage_vgg16(self.sess, agent_args)
+        elif self.agent_type == 'advantage_objects_no_image':
+            self.ag = FuturePredictorAgentAdvantageObjectNoImage(self.sess, agent_args)
+
         else:
             raise Exception('Unknown agent type', self.agent_type)
 

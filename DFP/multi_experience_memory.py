@@ -10,6 +10,7 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
+from tensorboard.plugins.beholder.video_writing import VideoWriter
 
 from . import util as my_util
 
