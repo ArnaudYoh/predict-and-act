@@ -62,13 +62,25 @@ class FutureTargetMaker:
         '''
         capacity = meas.shape[0]
         targets = np.zeros((len(indices), self.num_targets, len(self.future_steps)), dtype='float32')
+        # print("#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n")
         for ns, sample in enumerate(indices):
             # measurement targets
             curr_future_steps = (sample + self.future_steps) % capacity
+            # print("future steps", self.future_steps)
+            # print("meas to predict", self.meas_to_predict)
+            # print("removed meas", meas[None, sample])
+            # print("sample", sample)
+            # print("curr_future_steps", curr_future_steps)
             if isinstance(meas_mean, np.ndarray) and isinstance(meas_std, np.ndarray):
                 targets[ns, :len(self.meas_to_predict), :] = ((meas[curr_future_steps][:, self.meas_to_predict] - meas[None,sample][:, self.meas_to_predict])/meas_std[:, self.meas_to_predict]).transpose()
+                # print("measure future",meas[curr_future_steps][:, self.meas_to_predict])
+                # print("measure removed",meas[None,sample][:, self.meas_to_predict])
+                # print("result", targets[ns, :len(self.meas_to_predict), :])
             else:
                 targets[ns, :len(self.meas_to_predict), :] = (meas[curr_future_steps][:, self.meas_to_predict] - meas[None,sample][:, self.meas_to_predict]).transpose()
+                # print("measure future", meas[curr_future_steps][:, self.meas_to_predict])
+                # print("measure removed", meas[None, sample][:, self.meas_to_predict])
+                # print("result", targets[ns, :len(self.meas_to_predict), :])
             invalid_samples = (n_episode[curr_future_steps] != n_episode[sample])
             if self.invalid_targets_replacement == 'nan':
                 targets[ns, :len(self.meas_to_predict), invalid_samples] = np.nan # make invalid the entries which fall into the following episodes
@@ -84,9 +96,8 @@ class FutureTargetMaker:
             end_of_episode = np.argmax(invalid_samples) - 1
             rwrds_cumsum[:, invalid_samples] = rwrds_cumsum[:,end_of_episode,np.newaxis]
             targets[ns, len(self.meas_to_predict):, :] = rwrds_cumsum[:,self.future_steps - 1]
-            
+        #     print("Reward schedule", self.rwrd_schedules)
+        #     print("n_episode", n_episode)
+        #     print("2nd targets", targets[ns, len(self.meas_to_predict):, :])
+        # print(targets)
         return np.reshape(targets, (len(indices), self.target_dim))
-        
-        
-        
-        

@@ -149,7 +149,7 @@ class Agent:
         acts_manual = np.zeros((num_samples, self.num_manual_controls), dtype=np.bool)
         return self.postprocess_actions(acts_net, acts_manual)
 
-    def make_net(self, input_images, input_measurements, input_actions, input_objective_coeffs):
+    def make_net(self, input_images, input_depths, input_measurements, input_actions, input_objective_coeffs):
         # Build the net which will perform the future prediction. Returns pred_all (a vector of predicted future values for all actions) and pred_relevant (a vector of predicted future values for the action which was actually taken)
         raise NotImplementedError("Agent should implement make_net")
 
@@ -160,10 +160,14 @@ class Agent:
     def build_model(self):
         # prepare the data
         self.input_images = tf.placeholder(tf.float32, [None] + [self.state_imgs_shape[1], self.state_imgs_shape[2],
-                                                                 self.state_imgs_shape[0]],
-                                           name='input_images')
-        self.input_measurements = tf.placeholder(tf.float32, [None] + list([x + self.state_objects_shape[0] * self.state_objects_shape[1] for x in self.state_meas_shape]),
+                                                                 self.state_imgs_shape[0]], name='input_images')
+        self.input_depths = tf.placeholder(tf.float32, [None] + [self.state_imgs_shape[1], self.state_imgs_shape[2],
+                                                                 self.state_imgs_shape[0]], name='input_images')
+        self.input_measurements = tf.placeholder(tf.float32, [None] + list(
+            [x + self.state_objects_shape[0] * self.state_objects_shape[1] for x in self.state_meas_shape]),
                                                  name='input_measurements')
+        # self.input_measurements = tf.placeholder(tf.float32, [None] + list(self.state_meas_shape),
+        #                                          name='input_measurements')
 
         self.input_targets = tf.placeholder(tf.float32, [None, self.target_dim],
                                             name='input_targets')
@@ -174,6 +178,7 @@ class Agent:
 
         if self.preprocess_input_images:
             self.input_images_preprocessed = self.preprocess_input_images(self.input_images)
+            self.input_depths_preprocessed = self.preprocess_input_images(self.input_depths)
         if self.preprocess_input_measurements:
             self.input_measurements_preprocessed = self.preprocess_input_measurements(self.input_measurements)
         if self.preprocess_input_targets:
@@ -185,6 +190,7 @@ class Agent:
 
         # make the actual net
         self.pred_all, self.pred_relevant = self.make_net(self.input_images_preprocessed,
+                                                          self.input_depths_preprocessed,
                                                           self.input_measurements_preprocessed,
                                                           self.input_actions,
                                                           self.input_objective_coeffs)
@@ -237,13 +243,13 @@ class Agent:
 
         tf.global_variables_initializer().run(session=self.sess)
 
-    def act(self, state_imgs, state_meas, state_objects, objective_coeffs):
+    def act(self, state_imgs, state_depths, state_meas, state_objects, objective_coeffs):
         return self.postprocess_actions(
-            self.act_net(state_imgs, state_meas[:, self.meas_for_net], state_objects[:, self.object_for_net],
-                         objective_coeffs),
+            self.act_net(state_imgs, state_depths, state_meas[:, self.meas_for_net],
+                         state_objects[:, self.object_for_net], objective_coeffs),
             self.act_manual(state_meas[:, self.meas_for_manual], state_objects[:, self.object_for_manual]))
 
-    def act_net(self, state_imgs, state_meas, state_object, objective_coeffs):
+    def act_net(self, state_imgs, state_depths, state_meas, state_object, objective_coeffs):
         raise NotImplementedError("Agent should implement act_net, which takes the input state and outputs an action")
 
     def act_manual(self, state_meas, state_objects):
@@ -308,8 +314,8 @@ class Agent:
                 self.curr_predictions = None
                 curr_act = self.agent.random_actions(multi_memory.num_heads)
             else:
-                state_imgs, state_meas, state_objects = multi_memory.get_current_state()
-                curr_act = self.agent.act(state_imgs, state_meas, state_objects, self.objective_coeffs)
+                state_imgs, state_depths, state_meas, state_objects = multi_memory.get_current_state()
+                curr_act = self.agent.act(state_imgs, state_depths, state_meas, state_objects, self.objective_coeffs)
                 self.curr_predictions = self.agent.curr_predictions
             return curr_act
 
@@ -322,17 +328,18 @@ class Agent:
         return Agent.Actor(self, objective_coeffs, random_prob, random_objective_coeffs)
 
     def train_one_batch(self, experience, get_objects=False):
-        state_imgs, state_meas, state_objects, rwrds, terms, acts, targs, objs = experience.get_random_batch(
+        state_imgs, state_depths, state_meas, state_objects, rwrds, terms, acts, targs, objs = experience.get_random_batch(
             self.batch_size)
         acts = self.preprocess_actions(acts)
 
         res = self.sess.run([self.tf_minim, self.short_summary, self.detailed_summary] + self.errs_to_print,
-                                feed_dict={self.input_images: state_imgs,
-                                           self.input_measurements: np.concatenate(
-                                                                  [state_meas, state_objects], 1),
-                                           self.input_targets: targs,
-                                           self.input_actions: acts,
-                                           self.input_objective_coeffs: objs})
+                            feed_dict={self.input_images: state_imgs,
+                                       self.input_depths: state_depths,
+                                       self.input_measurements: np.concatenate(
+                                           [state_meas, state_objects], 1),
+                                       self.input_targets: targs,
+                                       self.input_actions: acts,
+                                       self.input_objective_coeffs: objs})
 
         curr_short_summary = res[1]
         curr_detailed_summary = res[2]
@@ -349,8 +356,9 @@ class Agent:
 
         if self.save_param_histograms_every and np.mod(self.curr_step, self.save_param_histograms_every) == 0:
             summary_string = self.sess.run(self.param_summary, feed_dict={self.input_images: state_imgs,
+                                                                          self.input_depths: state_depths,
                                                                           self.input_measurements: np.concatenate(
-                                                                  [state_meas, state_objects], 1),
+                                                                              [state_meas, state_objects], 1),
                                                                           self.input_targets: targs,
                                                                           self.input_actions: acts,
                                                                           self.input_objective_coeffs: objs})

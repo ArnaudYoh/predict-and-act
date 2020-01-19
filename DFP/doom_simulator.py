@@ -34,6 +34,8 @@ class DoomSimulator:
         self._game.add_available_game_variable(vizdoom.GameVariable.POSITION_Z)
         self._game.set_objects_info_enabled(True)
         self._game.set_sectors_info_enabled(True)
+        self._game.set_labels_buffer_enabled(True)
+        self._game.set_depth_buffer_enabled(True)
         self._game.set_vizdoom_path(os.path.join(vizdoom_path,'vizdoom'))
         self._game.set_doom_game_path(os.path.join(vizdoom_path,'freedoom2.wad'))
         self._game.load_config(self.config)
@@ -126,6 +128,7 @@ class DoomSimulator:
         
         if state is None:
             img = None
+            depth = None
             meas = None
             game_object = None
         else:        
@@ -137,6 +140,8 @@ class DoomSimulator:
                 raw_img = state.screen_buffer
             elif self.color_mode == 'GRAY':
                 raw_img = np.expand_dims(state.screen_buffer,0)
+
+            raw_depth = state.depth_buffer
                 
             if self.resize:
                 if self.num_channels == 1:
@@ -144,24 +149,31 @@ class DoomSimulator:
                         img = None
                     else:
                         img = cv2.resize(raw_img[0], (self.resolution[0], self.resolution[1]))[None,:,:]
+
+                    if raw_depth is None or (isinstance(raw_depth, list) and raw_depth[0] is None):
+                        depth = None
+                    else:
+                        depth = cv2.resize(raw_depth[0], (self.resolution[0], self.resolution[1]))[None,:,:]
+
                 else:
                     raise NotImplementedError('not implemented for non-Grayscale images')
             else:
                 img = raw_img
+                depth = raw_depth
                 
             meas = state.game_variables # this is a numpy array of game variables specified by the scenario
             health_kits_pos = []
             poison_vial_pos = []
             player_pos = None
-            for o in state.objects:
+            for idx, o in enumerate(state.objects):
                 if o.name == 'DoomPlayer':
                     player_pos = (o.position_x, o.position_y)
                     break
 
             for label in state.labels:
-                if label.name == 'CustomMedikit' or label.name == 'Medikit':
+                if label.object_name == 'CustomMedikit' or label.object_name == 'Medikit':
                     health_kits_pos.append((label.object_position_x, label.object_position_y))
-                elif label.name == 'Poison':
+                elif label.object_name == 'Poison':
                     poison_vial_pos.append((label.object_position_x, label.object_position_y))
 
             closest_health = self.get_closest(health_kits_pos, player_pos)
@@ -175,10 +187,11 @@ class DoomSimulator:
         if term:
             self.new_episode() # in multiplayer multi_simulator takes care of this            
             img = np.zeros((self.num_channels, self.resolution[1], self.resolution[0]), dtype=np.uint8) # should ideally put nan here, but since it's an int...
+            depth = np.zeros((self.num_channels, self.resolution[1], self.resolution[0]), dtype=np.uint8)
             meas = np.zeros(self.num_meas, dtype=np.uint32) # should ideally put nan here, but since it's an int...
             game_object = np.zeros((self.num_objects,))
             
-        return img, meas, game_object, rwrd, term
+        return img, depth, meas, game_object, rwrd, term
     
     def get_random_action(self):
         return [(random.random() >= .5) for i in range(self.num_buttons)]

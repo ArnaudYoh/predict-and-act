@@ -41,6 +41,7 @@ class MultiExperienceMemory:
         self.objects_shape = (4,)
         self.action_shape = (multi_simulator.action_len,)
         self.state_imgs_shape = (self.history_length * self.img_shape[0],) + self.img_shape[1:]
+        # self.state_depths_shape = (self.history_length * self.img_shape[0],) + self.img_shape[1:]
         self.state_meas_shape = (self.history_length * self.meas_shape[0],)
         self.state_objects_shape = (self.history_length * self.objects_shape[0], )
 
@@ -49,6 +50,8 @@ class MultiExperienceMemory:
 
     def reset(self):
         self._images = my_util.make_array(shape=(self.capacity,) + self.img_shape, dtype=np.uint8, shared=self.shared,
+                                          fill_val=0)
+        self._depths = my_util.make_array(shape=(self.capacity,) + self.img_shape, dtype=np.uint8, shared=self.shared,
                                           fill_val=0)
         self._measurements = my_util.make_array(shape=(self.capacity,) + self.meas_shape, dtype=np.float32,
                                                 shared=self.shared, fill_val=0.)
@@ -69,7 +72,7 @@ class MultiExperienceMemory:
         self._curr_indices = np.arange(self.num_heads) * int(self.head_offset)
         self._episode_counts = np.zeros(self.num_heads)
 
-    def add(self, imgs, meass, objects, rwrds, terms, acts, objs=None, preds=None):
+    def add(self, imgs, depths, meass, objects, rwrds, terms, acts, objs=None, preds=None):
         ''' Add experience to dataset.
 
         Args:
@@ -82,6 +85,7 @@ class MultiExperienceMemory:
         '''
 
         self._images[self._curr_indices] = imgs
+        self._depths[self._curr_indices] = depths
         self._measurements[self._curr_indices] = meass
         self._objects[self._curr_indices] = objects
         self._rewards[self._curr_indices] = rwrds
@@ -236,12 +240,15 @@ class MultiExperienceMemory:
         state_imgs = np.transpose(
             np.reshape(np.take(self._images, frames, axis=0), (len(indices),) + self.state_imgs_shape),
             [0, 2, 3, 1]).astype(np.float32)
+        state_depths = np.transpose(
+            np.reshape(np.take(self._depths, frames, axis=0), (len(indices),) + self.state_imgs_shape),
+            [0, 2, 3, 1]).astype(np.float32)
         state_meas = np.reshape(np.take(self._measurements, frames, axis=0),
                                 (len(indices),) + self.state_meas_shape).astype(np.float32)
         state_objects = np.reshape(np.take(self._objects, frames, axis=0),
                                    (len(indices),) + self.state_objects_shape).astype(np.float32)
 
-        return state_imgs, state_meas, state_objects
+        return state_imgs, state_depths, state_meas, state_objects
 
     def get_current_state(self):
         '''  Return most recent observation sequence '''
@@ -274,18 +281,20 @@ class MultiExperienceMemory:
         indices_arr = np.array(indices)
         state_info = self.get_states((indices_arr - 1) % self.capacity)
         state_imgs = state_info[0]
-        state_meas = state_info[1]
-        state_objects = state_info[2]
+        state_depths = state_info[1]
+        state_meas = state_info[2]
+        state_objects = state_info[3]
         rwrds = self._rewards[indices_arr]
         acts = self._actions[indices_arr]
         terms = self._terminals[indices_arr].astype(int)
         targs = self.get_targets((indices_arr - 1) % self.capacity)
+        # print("TARGS :D ", targs)
         if isinstance(self._objectives, np.ndarray):
             objs = self._objectives[indices_arr]
         else:
             objs = None
 
-        return state_imgs, state_meas, state_objects, rwrds, terms, acts, targs, objs
+        return state_imgs, state_depths, state_meas, state_objects, rwrds, terms, acts, targs, objs
 
     def get_random_batch(self, batch_size):
         ''' Sample minibatch of experiences for training '''

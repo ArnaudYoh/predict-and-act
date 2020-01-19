@@ -53,6 +53,7 @@ class FuturePredictorAgentAdvantageObject(Agent):
         # compute objective value, just for logging purposes
         # TODO add multiplication by the objective_coeffs (somehow not trivial)
         obj = tf.reduce_sum(self.postprocess_predictions(targets_preprocessed), 1)
+        tf.print(obj)
         # obj = tf.sum(self.postprocess_predictions(targets_preprocessed[:,objective_indices]) * objective_coeffs[None,:], axis=1)
         obj_nonan = tf.where(tf.is_nan(obj), tf.zeros_like(obj), obj)
         num_valid_targets = tf.reduce_sum(1 - tf.cast(tf.is_nan(obj), tf.float32))
